@@ -104,5 +104,71 @@ services:
       timeout: 10s
       retries: 5
   
+  webserver:
+    image: apache/airflow:2.6.0-python3.9
+    command: webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: 'ozVCS99QDuui0uetv4po0sCGtUlqt1spkaW4GF7MTvE='
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__RBAC: 'True'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    depends_on:
+      - postgres
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/scripts
+    ports:
+      - "8080:8080"
+    entrypoint: /bin/bash -c "airflow db init && \
+                              airflow users create --username airflow --firstname Airflow --lastname Admin --role Admin --email admin@example.com --password airflow && \
+                              airflow webserver"
+    healthcheck:
+      test: ['CMD-SHELL', "[ -f /opt/airflow/airflow-webserver.pid ]"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    networks:
+      - confluent
+  
+  postgres:
+    image: postgres:16.0
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - confluent
+  
+  scheduler:
+    image: apache/airflow:2.6.0-python3.9
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: 'ozVCS99QDuui0uetv4po0sCGtUlqt1spkaW4GF7MTvE='
+    depends_on:
+      webserver:
+        condition: service_healthy
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
+      - C:/Users/mi/pet/try1/requirements.txt:/opt/airflow/requirements.txt
+    command: bash -c "pip install -r ./requirements.txt && airflow db upgrade && airflow scheduler"
+    networks:
+      - confluent
+  
 networks:
   confluent:

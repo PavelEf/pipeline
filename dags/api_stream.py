@@ -1,29 +1,30 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[14]:
+# In[36]:
 
 
 import requests
 import json
 import time
+import logging
 
 
-# In[8]:
+# In[51]:
 
 
-# from datetime import datetime
-# from airflow import DAG
-# from airflow.operators.python import PythonOperator
+from datetime import datetime
+from airflow import DAG
+from airflow.operators.python import PythonOperator
 
 
-# In[13]:
+# In[38]:
 
 
 from kafka import KafkaProducer
 
 
-# In[9]:
+# In[39]:
 
 
 def get_data(): # load data from API
@@ -35,7 +36,7 @@ def get_data(): # load data from API
     return data
 
 
-# In[10]:
+# In[40]:
 
 
 def format_data(data): # делаем словарь с нужной нам структурой и названиями
@@ -56,41 +57,71 @@ def format_data(data): # делаем словарь с нужной нам ст
     return d
 
 
-# In[21]:
+# In[41]:
 
 
 def json_serializer(data):
     return json.dumps(data).encode('utf-8')
 
 
-# In[22]:
+# In[44]:
 
 
 def stream_data(): # setting Kafka
-    res = get_data()
-    res = format_data(res)
-#     print(res)
-#     print(json.dumps(res, indent=3))
-
     producer = KafkaProducer(
-        bootstrap_servers=['localhost:9092']
-#         max_block_ms=5000
+        bootstrap_servers=['broker:29092'],
+        max_block_ms=5000
 #         value_serializer=json_serializer
     )
     
-    producer.send('users_created', json_serializer(res))# value=message)
+    curr_time = time.time()
+    
+    while True:
+        if curr_time + 60 < time.time():
+            break
+        try:
+            res = get_data()
+            res = format_data(res)
+#     print(res)
+#     print(json.dumps(res, indent=3))
+    
+            producer.send('users_created', json_serializer(res))# value=message)
+#     producer.send('users_created', value=res)
+        except Exception as e:
+            logging.error(f'Error now: {e}')
+            continue
+    
+#     producer.flush()
+#     producer.close()
 
 
-# In[25]:
+# In[46]:
 
 
-stream_data()
+# stream_data()
 
 
-# In[ ]:
+# In[52]:
 
 
+default_args = {
+    'owner': 'airscholar',
+    'start_date': datetime(2023, 7, 4, 13, 10)
+}
 
+
+# In[54]:
+
+
+with DAG('user_automation',
+         default_args=default_args,
+         schedule='*/5 * * * *',
+         catchup=False) as dag:
+
+    streaming_task = PythonOperator(
+        task_id='stream_data_from_api',
+        python_callable=stream_data
+    )
 
 
 # In[15]:

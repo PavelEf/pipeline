@@ -196,7 +196,7 @@ services:
       - confluent
 
   cassandra_db:
-    image: cassandra:latest
+    image: cassandra:4.0.13
     container_name: cassandra
     hostname: cassandra
     ports:
